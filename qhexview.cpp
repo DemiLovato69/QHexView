@@ -1,6 +1,7 @@
 #include "qhexview.h"
 #include "document/buffer/qmemorybuffer.h"
 #include <QFontDatabase>
+#include <QFontInfo>
 #include <QApplication>
 #include <QPaintEvent>
 #include <QHelpEvent>
@@ -16,11 +17,11 @@ QHexView::QHexView(QWidget *parent) : QAbstractScrollArea(parent), m_document(nu
 {
     QFont f = QFontDatabase::systemFont(QFontDatabase::FixedFont);
 
-    if(f.styleHint() != QFont::TypeWriter)
-    {
-        f.setFamily("Monospace"); // Force Monospaced font
-        f.setStyleHint(QFont::TypeWriter);
-    }
+    f.setStyleHint(QFont::Monospace);
+    f.setFixedPitch(true);
+    const qreal systemSize = f.pointSizeF() > 0 ? f.pointSizeF() : QFontInfo(f).pointSizeF();
+    const qreal applicationSize = qApp->font().pointSizeF() > 0 ? qApp->font().pointSizeF() : QFontInfo(qApp->font()).pointSizeF();
+    f.setPointSizeF(std::max(qreal(12), std::max(systemSize, applicationSize)));
 
     this->setFont(f);
     this->setFocusPolicy(Qt::StrongFocus);
@@ -47,12 +48,13 @@ void QHexView::setDocument(QHexDocument *document)
         m_document->deleteLater();
 
     m_document = document;
-    m_renderer = new QHexRenderer(m_document, this->fontMetrics(), this);
+    m_renderer = new QHexRenderer(m_document, QFontMetricsF(this->font(), viewport()), this);
 
     connect(m_document, &QHexDocument::documentChanged, this, [&]() {
         this->adjustScrollBars();
         this->viewport()->update();
     });
+    connect(m_document, &QHexDocument::lineChanged, this, &QHexView::renderLine);
 
     connect(m_document->cursor(), &QHexCursor::positionChanged, this, &QHexView::moveToSelection);
     connect(m_document->cursor(), &QHexCursor::insertionModeChanged, this, &QHexView::renderCurrentLine);
@@ -69,10 +71,16 @@ void QHexView::setReadOnly(bool b)
 
 bool QHexView::event(QEvent *e)
 {
-    if(m_renderer && (e->type() == QEvent::FontChange))
+    if(m_renderer && (e->type() == QEvent::FontChange || e->type() == QEvent::ApplicationFontChange ||
+                      e->type() == QEvent::ScreenChangeInternal
+#if QT_VERSION >= QT_VERSION_CHECK(6, 6, 0)
+                      || e->type() == QEvent::DevicePixelRatioChange
+#endif
+                      ))
     {
-        m_renderer->updateMetrics(QFontMetricsF(this->font()));
-        return true;
+        m_renderer->updateMetrics(QFontMetricsF(this->font(), viewport()));
+        this->adjustScrollBars();
+        this->viewport()->update();
     }
 
     if(m_document && m_renderer && (e->type() == QEvent::ToolTip))
@@ -234,6 +242,7 @@ void QHexView::paintEvent(QPaintEvent *e)
 
     QPainter painter(this->viewport());
     painter.setFont(this->font());
+    painter.fillRect(e->rect(), palette().brush(QPalette::Base));
 
     const QRect& r = e->rect();
 
@@ -265,7 +274,8 @@ void QHexView::moveToSelection()
     if(!this->isLineVisible(cur->currentLine()))
     {
         QScrollBar* vscrollbar = this->verticalScrollBar();
-        int scrollPos = static_cast<int>(std::max(quint64(0), (cur->currentLine() - this->visibleLines() / 2)) / documentSizeFactor());
+        const quint64 halfPage = this->visibleLines() / 2;
+        int scrollPos = static_cast<int>((cur->currentLine() > halfPage ? cur->currentLine() - halfPage : 0) / documentSizeFactor());
         vscrollbar->setValue(scrollPos);
     }
     else
@@ -572,41 +582,31 @@ bool QHexView::processTextInput(QHexCursor *cur, QKeyEvent *e)
 
 void QHexView::adjustScrollBars()
 {
+    if(!m_renderer) return;
     QScrollBar *vscrollbar = this->verticalScrollBar();
     int sizeFactor = this->documentSizeFactor();
-    vscrollbar->setSingleStep(sizeFactor);
+    vscrollbar->setSingleStep(1);
 
     quint64 docLines = m_renderer->documentLines();
     quint64 visLines = this->visibleLines();
 
     if(docLines > visLines)
     {
-        this->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
-        vscrollbar->setMaximum(static_cast<int>((docLines - visLines) / sizeFactor + 1));
+        vscrollbar->setMaximum(static_cast<int>((docLines - visLines + sizeFactor - 1) / sizeFactor));
     }
     else
     {
-        this->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        vscrollbar->setValue(0);
-        vscrollbar->setMaximum(static_cast<int>(docLines));
+        vscrollbar->setMaximum(0);
     }
+    vscrollbar->setPageStep(std::max(1, static_cast<int>(visLines / sizeFactor)));
 
     QScrollBar *hscrollbar = this->horizontalScrollBar();
     int documentWidth = m_renderer->documentWidth();
     int viewportWidth = viewport()->width();
 
-    if(documentWidth > viewportWidth)
-    {
-        this->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
-        // +1 to see the rightmost vertical line, +2 seems more pleasant to the eyes
-        hscrollbar->setMaximum(documentWidth - viewportWidth + 2);
-    }
-    else
-    {
-        this->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        hscrollbar->setValue(0);
-        hscrollbar->setMaximum(documentWidth);
-    }
+    hscrollbar->setRange(0, std::max(0, documentWidth - viewportWidth + 1));
+    hscrollbar->setPageStep(viewportWidth);
+    hscrollbar->setSingleStep(std::max(1, QFontMetrics(font()).horizontalAdvance(QLatin1Char('0'))));
 }
 
 void QHexView::renderLine(quint64 line)
@@ -616,11 +616,11 @@ void QHexView::renderLine(quint64 line)
 }
 
 quint64 QHexView::firstVisibleLine() const { return static_cast<quint64>(this->verticalScrollBar()->value()) * documentSizeFactor(); }
-quint64 QHexView::lastVisibleLine() const { return this->firstVisibleLine() + this->visibleLines() - 1; }
+quint64 QHexView::lastVisibleLine() const { return this->firstVisibleLine() + std::max(quint64(1), this->visibleLines()) - 1; }
 
 quint64 QHexView::visibleLines() const
 {
-    int visLines = std::ceil(this->height() / m_renderer->lineHeight()) - m_renderer->headerLineCount();
+    const int visLines = std::max(0, viewport()->height() / m_renderer->lineHeight() - m_renderer->headerLineCount());
     return std::min(quint64(visLines), m_renderer->documentLines());
 }
 

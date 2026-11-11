@@ -1,6 +1,23 @@
 QHexView
 ========
-QHexView is a hexadecimal widget for Qt5
+QHexView is a hexadecimal widget for Qt6.
+
+Rendering uses the system fixed-pitch font with a default size of at least 12 pt
+(or the larger system text size). Change the widget's font to adjust the size.
+Hex and ASCII text have separate clip regions; the text layout uses the painter's
+device metrics. Font, screen, row-width and indent changes refresh scroll ranges.
+QHexView already owns both scrollbars: do not wrap it in another QScrollArea.
+
+Build and run the rendering, hit-test and scrolling regression tests:
+
+```sh
+cmake -S . -B build -DBUILD_TESTING=ON
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
+```
+
+Tests use Qt Test and an offscreen platform. They cover 12–24 pt fonts, fractional
+and integer pixel ratios, selection/metadata, empty/partial rows and large images.
 
 <p align="center">
 <img height="400" src="https://raw.githubusercontent.com/Dax89/QHexEdit/master/screenshots/QHexView.png"><br>

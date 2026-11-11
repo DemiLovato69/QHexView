@@ -35,13 +35,19 @@ quint64 QHexDocument::baseAddress() const { return m_baseaddress; }
 QHexCursor *QHexDocument::cursor() const { return m_cursor; }
 
 int QHexDocument::areaIndent() const { return m_areaindent;}
-void QHexDocument::setAreaIndent(quint8 value) { m_areaindent = value; }
+void QHexDocument::setAreaIndent(quint8 value) {
+    if (m_areaindent == value) return;
+    m_areaindent = value;
+    emit documentChanged();
+}
 int QHexDocument::hexLineWidth() const { return m_hexlinewidth; }
 void QHexDocument::setHexLineWidth(quint8 value)
 {
+    if (!value || value == m_hexlinewidth) return;
     m_hexlinewidth = value;
     m_cursor->setLineWidth(value);
     m_metadata->setLineWidth(value);
+    emit documentChanged();
 }
 
 QHexMetadata *QHexDocument::metadata() const { return m_metadata; }
