@@ -69,7 +69,7 @@ class QHexMetadata : public QObject
         void metadataCleared();
 
     private:
-        quint8 m_lineWidth;
+        quint8 m_lineWidth = 16;
         QHash<quint64, QHexLineMetadata> m_metadata;
         QVector<QHexMetadataAbsoluteItem> m_absoluteMetadata;
 };

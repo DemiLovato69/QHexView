@@ -82,7 +82,7 @@ void QHexMetadata::setAbsoluteMetadata(const QHexMetadataAbsoluteItem& mai)
         }
         else
         {
-            length = m_lineWidth;
+            length = m_lineWidth - start;
         }
         if (length > 0)
         {

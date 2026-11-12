@@ -17,6 +17,8 @@ class QHexView : public QAbstractScrollArea
         QHexDocument* document();
         void setDocument(QHexDocument* document);
         void setReadOnly(bool b);
+        quint64 firstVisibleLine() const;
+        quint64 lastVisibleLine() const;
 
     protected:
         virtual bool event(QEvent* e);
@@ -45,8 +47,6 @@ class QHexView : public QAbstractScrollArea
         bool processAction(QHexCursor* cur, QKeyEvent* e);
         void adjustScrollBars();
         void renderLine(quint64 line);
-        quint64 firstVisibleLine() const;
-        quint64 lastVisibleLine() const;
         quint64 visibleLines() const;
         bool isLineVisible(quint64 line) const;
 

@@ -173,6 +173,23 @@ private slots:
         QCOMPARE(geometry.documentLastColumn(), 3);
         QCOMPARE(view.document()->length(), qint64(bytes.size()));
     }
+
+    void metadataCrossingLinesStopsAtEachLineBoundary() {
+        QHexView view;
+        view.setDocument(QHexDocument::fromMemory<QMemoryBuffer>(QByteArray(64, 'A'), &view));
+        auto* metadata = view.document()->metadata();
+        metadata->metadata(qint64(14), qint64(20), Qt::black, Qt::yellow, "boundary");
+        QCOMPARE(metadata->get(0).front().start, 14);
+        QCOMPARE(metadata->get(0).front().length, 2);
+        QCOMPARE(metadata->get(1).front().start, 0);
+        QCOMPARE(metadata->get(1).front().length, 4);
+        QVERIFY(metadata->comments(1, 4).isEmpty());
+        view.document()->setHexLineWidth(8);
+        QVERIFY(!metadata->hasMetadata(0));
+        QCOMPARE(metadata->get(1).front().start, 6);
+        QCOMPARE(metadata->get(1).front().length, 2);
+        QCOMPARE(metadata->get(2).front().length, 4);
+    }
 };
 
 QTEST_MAIN(RenderingTest)
