@@ -14,6 +14,7 @@ class QHexView : public QAbstractScrollArea
 
     public:
         explicit QHexView(QWidget *parent = nullptr);
+        static QFont fixedFont(const QFont& preferred);
         QHexDocument* document();
         void setDocument(QHexDocument* document);
         void setReadOnly(bool b);

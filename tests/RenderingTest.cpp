@@ -38,6 +38,17 @@ private slots:
         QVERIFY(QFontInfo(view.font()).fixedPitch());
     }
 
+    void proportionalFontFallsBackToMeasuredFixedPitch() {
+        auto preferred = QFontDatabase::systemFont(QFontDatabase::GeneralFont);
+        preferred.setPointSizeF(14);
+        const auto font = QHexView::fixedFont(preferred);
+        QVERIFY2(QFontInfo(font).fixedPitch(), qPrintable(QFontInfo(font).family()));
+        QVERIFY(font.pointSizeF() >= 14);
+        const QFontMetricsF metrics(font);
+        for (const auto character : QStringLiteral("08A iW"))
+            QCOMPARE(metrics.horizontalAdvance(character), metrics.horizontalAdvance(QLatin1Char('0')));
+    }
+
     void fontChangeRecalculatesScrollbars() {
         QHexView view;
         view.resize(500, 240);

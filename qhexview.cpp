@@ -13,17 +13,29 @@
 #define CURSOR_BLINK_INTERVAL 500 // ms
 #define DOCUMENT_WHEEL_LINES  3
 
-QHexView::QHexView(QWidget *parent) : QAbstractScrollArea(parent), m_document(nullptr), m_renderer(nullptr), m_readonly(false)
+QFont QHexView::fixedFont(const QFont& preferred)
 {
-    QFont f = QFontDatabase::systemFont(QFontDatabase::FixedFont);
-
+    QFont f = preferred;
     f.setStyleHint(QFont::Monospace);
     f.setFixedPitch(true);
     const qreal systemSize = f.pointSizeF() > 0 ? f.pointSizeF() : QFontInfo(f).pointSizeF();
     const qreal applicationSize = qApp->font().pointSizeF() > 0 ? qApp->font().pointSizeF() : QFontInfo(qApp->font()).pointSizeF();
     f.setPointSizeF(std::max(qreal(12), std::max(systemSize, applicationSize)));
+    f.setFamily(QFontInfo(f).family());
+    // Windows offscreen can resolve the generic monospace family to proportional Arial.
+    if (!QFontInfo(f).fixedPitch()) {
+        for (const auto& family : QFontDatabase::families()) {
+            if (!QFontDatabase::isFixedPitch(family)) continue;
+            f.setFamily(family);
+            if (QFontInfo(f).fixedPitch()) break;
+        }
+    }
+    return f;
+}
 
-    this->setFont(f);
+QHexView::QHexView(QWidget *parent) : QAbstractScrollArea(parent), m_document(nullptr), m_renderer(nullptr), m_readonly(false)
+{
+    this->setFont(fixedFont(QFontDatabase::systemFont(QFontDatabase::FixedFont)));
     this->setFocusPolicy(Qt::StrongFocus);
     this->setMouseTracking(true);
     this->verticalScrollBar()->setSingleStep(1);
